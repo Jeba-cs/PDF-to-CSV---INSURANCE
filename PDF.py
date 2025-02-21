@@ -50,6 +50,7 @@ def chatbot_with_deepseek(context, user_query, api_key):
     url = "https://api.deepseek.com/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
+    # Chain of Thought prompting
     full_prompt = f"""Use the following retrieved context to analyze the user's question step-by-step and 
     provide an accurate response.\n\nContext: {context}\n\nQuestion: {user_query}\n\nStep 1: Identify key 
     insurance-related entities in the question.\nStep 2: Search the provided context for matching 
@@ -77,7 +78,7 @@ def chatbot_with_deepseek(context, user_query, api_key):
 # Define DeepSeek Agent Tool - This now directly calls chatbot_with_deepseek
 def deepseek_agent_tool(query, api_key):
     results = query_embeddings(query, top_k=3)
-    retrieved_chunks = [meta.get("text", "N/A") for meta in results["metadatas"][0] if isinstance(meta, dict)] # Safely get text
+    retrieved_chunks = [meta.get("text", "N/A") for meta in results["metadatas"][0] if isinstance(meta, dict)]
 
     if not any(retrieved_chunks):
         st.warning("⚠️ No relevant chunks found in vector database.")
@@ -89,25 +90,58 @@ def deepseek_agent_tool(query, api_key):
     for i, chunk in enumerate(retrieved_chunks):
         st.markdown(f"**Chunk {i+1}:** {chunk[:300]}...")
 
+    # Call chatbot with context and user query for reasoning.
     response = chatbot_with_deepseek(context, query, api_key)
+
     return response
 
-# Function to extract insurance-related data (mock implementation)
+# Function to extract insurance-related data dynamically using embeddings (mock implementation)
 def extract_insurance_data(pdf_text):
-    # Placeholder function that simulates extraction of relevant fields.
-    # In a real implementation, you would use regex or NLP techniques to parse the text.
+    # This function should implement logic to extract relevant fields using embeddings.
 
     # Example extracted data (this should be replaced with actual extraction logic)
-    data = {
+
+    # Assuming we have a chain of thought prompt to extract specific fields:
+
+    prompt_template = f"""
+        Given the following text from an insurance document:\n{pdf_text}\n\n
+        Please identify and extract the following information:\n
+        1. Insured Name\n
+        2. Date of Birth (DOB)\n
+        3. Insurance Type\n
+        4. Payments\n
+        5. Policy Expiry Date\n
+        
+        Provide your answers with confidence scores and accuracy estimates.
+        
+        Your answer should be structured as follows:
+        - Insured Name:
+        - DOB:
+        - Insurance Type:
+        - Payments:
+        - Policy Expiry Date:
+        
+        Provide a confidence score for each extracted piece of information.
+        
+        Final Answer:
+    """
+
+    # Call DeepSeek API or another LLM here with prompt_template to get actual data extraction.
+
+    # For demonstration purposes only; this should be replaced with actual API call.
+
+    # Mocked extracted data as an example:
+    extracted_data = {
         'Insured Name': 'John Doe',
         'DOB': '01/01/1980',
         'Insurance Type': 'Health',
         'Payments': '$500',
+        'Policy Expiry Date': '12/31/2025',
         'Confidence Score': '95%',
         'Accuracy': 'High'
     }
 
-    return data
+    return extracted_data
 
 # Streamlit UI Setup
 st.set_page_config(page_title="Insurance PDF Analyzer", layout="wide")
@@ -140,14 +174,18 @@ deepseek_api_key = st.text_input("🔑 Enter DeepSeek API Key:", type="password"
 option = st.selectbox("Choose an option:", ["Chatbot", "View/Download Excel"])
 
 if option == "Chatbot":
-    if deepseek_api_key and user_query and pdf_text: #check if the data exist
+    if deepseek_api_key and user_query and pdf_text:
         query_tokens = calculate_token_count(user_query)
+
+        # Use embeddings to get relevant context for querying.
         results = query_embeddings(user_query, top_k=3)
 
         retrieved_chunks = [meta.get("text", "N/A") for meta in results["metadatas"][0] if isinstance(meta, dict)]
+
         context = "\n".join(retrieved_chunks)
 
         context_tokens = calculate_token_count(context)
+
         total_tokens = query_tokens + context_tokens
 
         st.markdown(f"📝 **Estimated Token Usage:** {total_tokens} (Query: {query_tokens}, Context: {context_tokens})")
@@ -157,23 +195,27 @@ if option == "Chatbot":
         st.text_area("AI Response:", value=agent_response, height=200)
 
 elif option == "View/Download Excel":
-    if pdf_text:  # Only proceed if pdf_text has a value
-        # Extract insurance-related data from PDF text
+    if pdf_text:
+
+        # Extract insurance-related data from PDF text using dynamic reasoning.
         extracted_data = extract_insurance_data(pdf_text)
 
-        # Create a DataFrame from extracted data
+        # Create a DataFrame from extracted data.
         df = pd.DataFrame([extracted_data])
 
-        # Display DataFrame in Streamlit app
+        # Display DataFrame in Streamlit app.
         st.write(df)
 
-        # Provide download link for Excel file
+        # Provide download link for Excel file.
+
         excel_file_name = "insurance_data.xlsx"
 
-        # Save DataFrame to Excel file
+        # Save DataFrame to Excel file using openpyxl engine.
+
         df.to_excel(excel_file_name, index=False)
 
-        # Download button for Excel file
+        # Download button for Excel file.
+
         with open(excel_file_name, "rb") as f:
             st.download_button(
                 label="Download Excel File",
@@ -181,5 +223,7 @@ elif option == "View/Download Excel":
                 file_name=excel_file_name,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+
     else:
-        st.warning("⚠️ Please upload a PDF file first.")
+
+         st.warning("⚠️ Please upload a PDF file first.")
